@@ -1,14 +1,29 @@
 import { useRef } from 'react'
 import { whatWeBuild } from '../data/content'
 import { useScrollReveal } from '../lib/useScrollReveal'
+import FloatingOrbs from './FloatingOrbs'
+import WaveBackground from './WaveBackground'
 
 export default function WhatWeBuild() {
   const sectionRef = useRef(null)
-  useScrollReveal(sectionRef, '.build-row', { x: -30, y: 0, stagger: 0.08 })
+  useScrollReveal(sectionRef, '.build-row', {
+    x: (i) => (i % 2 === 0 ? -80 : 80),
+    y: 0,
+    opacity: 0,
+    stagger: 0.08,
+    duration: 1,
+  })
 
   return (
-    <section id="solutions" ref={sectionRef} className="relative bg-[var(--color-bg-soft)] py-28 md:py-36">
-      <div className="mx-auto max-w-7xl px-6 md:px-10">
+    <section id="solutions" ref={sectionRef} className="relative overflow-hidden bg-[var(--color-bg-soft)] py-28 md:py-36">
+      <WaveBackground colorA="#a855f7" colorB="#ec4899" opacity={0.4} fillOpacity={0.04} tilt={0.55} />
+      <FloatingOrbs
+        orbs={[
+          { top: '4%', right: '10%', size: '380px', color: 'var(--color-accent-purple)', opacity: 0.16, blur: 130, speed: 0.3, duration: 18 },
+          { bottom: '2%', left: '4%', size: '340px', color: 'var(--color-accent-pink)', opacity: 0.15, blur: 120, speed: 0.35, duration: 21 },
+        ]}
+      />
+      <div className="relative mx-auto max-w-7xl px-6 md:px-10">
         <div className="mb-16 flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <div>
             <p className="mb-4 text-sm uppercase tracking-[0.2em] text-[var(--color-accent-2)]">Solutions</p>

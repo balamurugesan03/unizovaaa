@@ -1,16 +1,30 @@
 import { useRef } from 'react'
 import { useScrollReveal } from '../lib/useScrollReveal'
 import { useMagnetic } from '../lib/useMagnetic'
+import FloatingOrbs from './FloatingOrbs'
+import WaveBackground from './WaveBackground'
 
 export default function CTA() {
   const sectionRef = useRef(null)
   const btnRef = useMagnetic(0.3)
-  useScrollReveal(sectionRef, '.cta-reveal', { stagger: 0.1 })
+  useScrollReveal(sectionRef, '.cta-reveal', {
+    y: 30,
+    opacity: 0,
+    scale: 0.96,
+    stagger: 0.1,
+    ease: 'back.out(1.6)',
+  })
 
   return (
     <section id="cta" ref={sectionRef} className="relative overflow-hidden bg-[var(--color-bg)] py-32 md:py-44">
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)]/20 blur-[140px]" />
-      <div className="pointer-events-none absolute right-1/4 bottom-0 h-[400px] w-[400px] rounded-full bg-[var(--color-accent-2)]/15 blur-[120px]" />
+      <WaveBackground colorA="#319c3a" colorB="#3b82f6" opacity={0.5} fillOpacity={0.05} amplitude={0.7} />
+      <FloatingOrbs
+        orbs={[
+          { top: '10%', left: '18%', size: '560px', color: 'var(--color-accent)', opacity: 0.22, blur: 140, speed: 0.3, duration: 17 },
+          { bottom: '-5%', right: '15%', size: '440px', color: 'var(--color-accent-blue)', opacity: 0.18, blur: 130, speed: 0.35, duration: 20 },
+          { top: '30%', right: '30%', size: '320px', color: 'var(--color-accent-purple)', opacity: 0.16, blur: 110, speed: 0.4, duration: 15 },
+        ]}
+      />
 
       <div className="relative mx-auto max-w-4xl px-6 text-center md:px-10">
         <p className="cta-reveal mb-6 text-sm uppercase tracking-[0.2em] text-[var(--color-accent-2)]">

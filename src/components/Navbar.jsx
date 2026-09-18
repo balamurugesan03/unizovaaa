@@ -2,9 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { navLinks } from '../data/content'
 import { scrollToSection } from '../lib/lenis'
+import { useMagnetic } from '../lib/useMagnetic'
 
 export default function Navbar() {
   const navRef = useRef(null)
+  const menuRef = useRef(null)
+  const barsRef = useRef([])
+  const menuTlRef = useRef(null)
+  const talkRef = useMagnetic(0.4)
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
 
@@ -20,6 +25,41 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  useEffect(() => {
+    const [top, mid, bottom] = barsRef.current
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ paused: true })
+      tl.set(menuRef.current, { autoAlpha: 1 }, 0)
+        .fromTo(
+          menuRef.current,
+          { clipPath: 'inset(0% 0% 100% 0%)' },
+          { clipPath: 'inset(0% 0% 0% 0%)', duration: 0.55, ease: 'power4.inOut' },
+          0
+        )
+        .from(
+          '.mobile-link',
+          { y: 40, opacity: 0, stagger: 0.06, duration: 0.5, ease: 'power3.out' },
+          0.15
+        )
+        .to(top, { y: 3.5, rotate: 45, duration: 0.3, ease: 'power3.inOut' }, 0)
+        .to(mid, { opacity: 0, duration: 0.2 }, 0)
+        .to(bottom, { y: -3.5, rotate: -45, duration: 0.3, ease: 'power3.inOut' }, 0)
+      menuTlRef.current = tl
+    })
+    return () => ctx.revert()
+  }, [])
+
+  useEffect(() => {
+    const tl = menuTlRef.current
+    if (!tl) return
+    if (open) {
+      tl.play()
+    } else {
+      tl.eventCallback('onReverseComplete', () => gsap.set(menuRef.current, { autoAlpha: 0 }))
+      tl.reverse()
+    }
+  }, [open])
+
   const handleClick = (e, id) => {
     e.preventDefault()
     setOpen(false)
@@ -27,6 +67,7 @@ export default function Navbar() {
   }
 
   return (
+    <>
     <header
       ref={navRef}
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
@@ -54,8 +95,10 @@ export default function Navbar() {
         </ul>
 
         <a
+          ref={talkRef}
           href="#cta"
           onClick={(e) => handleClick(e, 'cta')}
+          data-cursor="hover"
           className="hidden rounded-full border border-white/15 px-5 py-2 text-sm transition-colors hover:border-[var(--color-accent-2)] hover:text-[var(--color-accent-2)] md:block"
         >
           Let's Talk
@@ -67,20 +110,21 @@ export default function Navbar() {
           onClick={() => setOpen((v) => !v)}
           className="relative z-50 flex h-9 w-9 flex-col items-center justify-center gap-1.5 md:hidden"
         >
-          <span className={`h-px w-6 bg-white transition-transform duration-300 ${open ? 'translate-y-[3.5px] rotate-45' : ''}`} />
-          <span className={`h-px w-6 bg-white transition-opacity duration-300 ${open ? 'opacity-0' : ''}`} />
-          <span className={`h-px w-6 bg-white transition-transform duration-300 ${open ? '-translate-y-[3.5px] -rotate-45' : ''}`} />
+          <span ref={(el) => (barsRef.current[0] = el)} className="h-px w-6 bg-white" />
+          <span ref={(el) => (barsRef.current[1] = el)} className="h-px w-6 bg-white" />
+          <span ref={(el) => (barsRef.current[2] = el)} className="h-px w-6 bg-white" />
         </button>
       </nav>
+    </header>
 
       <div
-        className={`fixed inset-0 z-40 flex flex-col justify-center bg-bg px-8 transition-opacity duration-300 md:hidden ${
-          open ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
-        }`}
+        ref={menuRef}
+        style={{ visibility: 'hidden', clipPath: 'inset(0% 0% 100% 0%)' }}
+        className="fixed inset-0 z-40 flex flex-col justify-center bg-bg px-8 md:hidden"
       >
         <ul className="flex flex-col gap-6">
           {navLinks.map((link) => (
-            <li key={link.id}>
+            <li key={link.id} className="mobile-link overflow-hidden">
               <a
                 href={`#${link.id}`}
                 onClick={(e) => handleClick(e, link.id)}
@@ -92,6 +136,6 @@ export default function Navbar() {
           ))}
         </ul>
       </div>
-    </header>
+    </>
   )
 }

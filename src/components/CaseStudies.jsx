@@ -1,14 +1,31 @@
 import { useRef } from 'react'
 import { caseStudies } from '../data/content'
 import { useScrollReveal } from '../lib/useScrollReveal'
+import FloatingOrbs from './FloatingOrbs'
+import TiltCard from './TiltCard'
+import WaveBackground from './WaveBackground'
 
 export default function CaseStudies() {
   const sectionRef = useRef(null)
-  useScrollReveal(sectionRef, '.case-card', { stagger: 0.12, y: 60 })
+  useScrollReveal(sectionRef, '.case-card', {
+    y: 80,
+    opacity: 0,
+    scale: 0.92,
+    rotateZ: (i) => (i % 2 === 0 ? -3 : 3),
+    stagger: 0.15,
+    duration: 1.1,
+  })
 
   return (
-    <section id="work" ref={sectionRef} className="relative bg-[var(--color-bg-soft)] py-28 md:py-36">
-      <div className="mx-auto max-w-7xl px-6 md:px-10">
+    <section id="work" ref={sectionRef} className="relative overflow-hidden bg-[var(--color-bg-soft)] py-28 md:py-36">
+      <WaveBackground colorA="#3b82f6" colorB="#319c3a" opacity={0.4} fillOpacity={0.04} tilt={0.55} />
+      <FloatingOrbs
+        orbs={[
+          { top: '4%', left: '6%', size: '360px', color: 'var(--color-accent-blue)', opacity: 0.14, blur: 130, speed: 0.25, duration: 18 },
+          { bottom: '2%', right: '4%', size: '320px', color: 'var(--color-accent)', opacity: 0.16, blur: 110, speed: 0.3, duration: 20 },
+        ]}
+      />
+      <div className="relative mx-auto max-w-7xl px-6 md:px-10">
         <div className="mb-16 flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <div>
             <p className="mb-4 text-sm uppercase tracking-[0.2em] text-[var(--color-accent-2)]">Our Works</p>
@@ -23,7 +40,11 @@ export default function CaseStudies() {
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {caseStudies.map((c) => (
-            <div key={c.title} className="case-card group relative overflow-hidden rounded-2xl border border-white/10">
+            <TiltCard
+              key={c.title}
+              strength={6}
+              className="case-card group relative overflow-hidden rounded-2xl border border-white/10"
+            >
               <div
                 className="relative h-56 overflow-hidden"
                 style={{ background: 'linear-gradient(to bottom right, #10261a, #0f1a14, #0a0a0f)' }}
@@ -45,7 +66,7 @@ export default function CaseStudies() {
                 <h3 className="font-[var(--font-display)] text-xl leading-snug">{c.title}</h3>
                 <p className="mt-3 text-sm text-[var(--color-muted)]">{c.desc}</p>
               </div>
-            </div>
+            </TiltCard>
           ))}
         </div>
       </div>

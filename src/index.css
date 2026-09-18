@@ -12,6 +12,11 @@
   --color-muted: #8d8d98;
   --color-accent: #319c3a;
   --color-accent-2: #5ed66e;
+  --color-accent-blue: #3b82f6;
+  --color-accent-cyan: #22d3ee;
+  --color-accent-purple: #a855f7;
+  --color-accent-pink: #ec4899;
+  --color-accent-amber: #f5a623;
 }
 
 @layer base {
@@ -73,21 +78,36 @@
     will-change: transform;
   }
 
-  @keyframes marquee {
-    to {
-      transform: translateX(-50%);
-    }
-  }
-
-  .marquee-track {
-    animation: marquee 22s linear infinite;
-  }
-
   @media (hover: hover) and (pointer: fine) {
     .has-cursor,
     .has-cursor a,
     .has-cursor button {
       cursor: none;
+    }
+  }
+
+  @keyframes drift {
+    0%, 100% {
+      transform: translate(0, 0) scale(1);
+    }
+    33% {
+      transform: translate(6%, -8%) scale(1.12);
+    }
+    66% {
+      transform: translate(-5%, 6%) scale(0.92);
+    }
+  }
+
+  .orb {
+    will-change: transform;
+    animation-name: drift;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb {
+      animation: none;
     }
   }
 }

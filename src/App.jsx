@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLenis } from './lib/useLenis'
 import Preloader from './components/Preloader'
 import Cursor from './components/Cursor'
+import ScrollProgress from './components/ScrollProgress'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
 import Marquee from './components/Marquee'
@@ -22,6 +23,7 @@ function App() {
     <>
       <Preloader onComplete={() => setReady(true)} />
       <Cursor />
+      <ScrollProgress />
       <Navbar />
       <main>
         <Hero ready={ready} />

@@ -1,12 +1,17 @@
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import HeroCanvas from './HeroCanvas'
+import FloatingOrbs from './FloatingOrbs'
 import SplitText from './SplitText'
 import { useMagnetic } from '../lib/useMagnetic'
 import { scrollToSection } from '../lib/lenis'
 
+gsap.registerPlugin(ScrollTrigger)
+
 export default function Hero({ ready }) {
   const rootRef = useRef(null)
+  const contentRef = useRef(null)
   const primaryRef = useMagnetic(0.3)
   const timelineRef = useRef(null)
 
@@ -30,6 +35,29 @@ export default function Hero({ ready }) {
       })
 
       timelineRef.current = tl
+
+      gsap.to(contentRef.current, {
+        yPercent: 30,
+        opacity: 0,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: rootRef.current,
+          start: 'top top',
+          end: 'bottom top',
+          scrub: 0.5,
+        },
+      })
+
+      gsap.to('.hero-canvas-wrap', {
+        scale: 1.15,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: rootRef.current,
+          start: 'top top',
+          end: 'bottom top',
+          scrub: 0.5,
+        },
+      })
     }, rootRef)
     return () => ctx.revert()
   }, [])
@@ -49,13 +77,19 @@ export default function Hero({ ready }) {
 
   return (
     <section id="home" ref={rootRef} className="relative flex min-h-screen items-center overflow-hidden bg-[var(--color-bg)]">
+      <FloatingOrbs
+        orbs={[
+          { top: '8%', left: '4%', size: '420px', color: 'var(--color-accent-purple)', opacity: 0.22, blur: 130, speed: 0.25, duration: 16 },
+          { top: '55%', right: '2%', size: '380px', color: 'var(--color-accent-blue)', opacity: 0.2, blur: 120, speed: 0.35, duration: 19 },
+        ]}
+      />
       <div className="hero-canvas-wrap pointer-events-none absolute inset-0 opacity-90">
         <HeroCanvas />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[var(--color-bg)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,var(--color-bg)_85%)]" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-7xl px-6 pt-24 md:px-10">
+      <div ref={contentRef} className="relative z-10 mx-auto w-full max-w-7xl px-6 pt-24 md:px-10">
         <p className="hero-eyebrow mb-6 text-sm uppercase tracking-[0.3em] text-[var(--color-accent-2)]">
           AI Software &amp; Automation Studio
         </p>
