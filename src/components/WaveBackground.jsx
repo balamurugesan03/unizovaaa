@@ -1,14 +1,127 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
+const NOISE_GLSL = `
+  vec3 mod289(vec3 x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
+  vec2 mod289(vec2 x){return x - floor(x * (1.0 / 289.0)) * 289.0;}
+  vec3 permute(vec3 x){return mod289(((x*34.0)+1.0)*x);}
+
+  float snoise(vec2 v){
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+             -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy));
+    vec2 x0 = v -   i + dot(i, C.xx);
+    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod289(i);
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+          + i.x + vec3(0.0, i1.x, 1.0 ));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+    m = m*m;
+    m = m*m;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+    vec3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
+`
+
+const TERRAIN_VERTEX = `
+  uniform float uTime;
+  uniform float uAmplitude;
+  varying float vElevation;
+  varying vec2 vUv;
+
+  ${NOISE_GLSL}
+
+  void main() {
+    vec3 pos = position;
+    float n1 = snoise(vec2(pos.x * 0.16 + uTime * 0.16, pos.y * 0.2 - uTime * 0.12));
+    float n2 = snoise(vec2(pos.x * 0.4 - uTime * 0.3, pos.y * 0.38 + uTime * 0.22)) * 0.5;
+    float elevation = (n1 + n2) * uAmplitude;
+    pos.z += elevation;
+    vElevation = elevation;
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  }
+`
+
+const TERRAIN_FRAGMENT = `
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  uniform vec3 uGlow;
+  uniform float uOpacity;
+  uniform float uTime;
+  varying float vElevation;
+  varying vec2 vUv;
+
+  void main() {
+    vec2 g = abs(fract(vUv * vec2(56.0, 30.0) - 0.5) - 0.5) / fwidth(vUv * vec2(56.0, 30.0));
+    float line = min(g.x, g.y);
+    float gridMask = 1.0 - clamp(line, 0.0, 1.0);
+
+    vec3 base = mix(uColorA, uColorB, vUv.y);
+    float crest = smoothstep(0.12, 0.55, vElevation);
+    vec3 color = base + uGlow * crest * 1.3;
+
+    float pulse = 1.0 - smoothstep(0.0, 0.5, abs(fract(vUv.y - uTime * 0.09) - 0.5) * 2.0 - 0.06);
+    color += uGlow * pulse * 0.9;
+
+    float edgeFade = smoothstep(0.0, 0.18, vUv.y) * smoothstep(1.0, 0.8, vUv.y);
+    float alpha = (gridMask * 0.85 + 0.05 + pulse * 0.35) * uOpacity * edgeFade;
+
+    gl_FragColor = vec4(color, alpha);
+  }
+`
+
+const PARTICLE_VERTEX = `
+  uniform float uTime;
+  attribute float aPhase;
+  attribute float aSize;
+  varying float vTwinkle;
+
+  void main() {
+    vec3 pos = position;
+    pos.y += sin(uTime * 0.3 + aPhase) * 0.35;
+    pos.x += cos(uTime * 0.18 + aPhase) * 0.2;
+    vTwinkle = 0.4 + 0.6 * (0.5 + 0.5 * sin(uTime * 1.6 + aPhase * 2.0));
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+    gl_PointSize = aSize * (80.0 / -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`
+
+const PARTICLE_FRAGMENT = `
+  uniform vec3 uColor;
+  varying float vTwinkle;
+
+  void main() {
+    float d = length(gl_PointCoord - 0.5);
+    float alpha = smoothstep(0.5, 0.0, d) * vTwinkle;
+    gl_FragColor = vec4(uColor, alpha * 0.85);
+  }
+`
+
+function lighten(hex, amt) {
+  const c = new THREE.Color(hex)
+  const white = new THREE.Color(0xffffff)
+  return c.lerp(white, amt)
+}
+
 export default function WaveBackground({
   colorA = '#319c3a',
   colorB = '#5ed66e',
-  opacity = 0.55,
-  fillOpacity = 0.05,
+  opacity = 0.65,
   speed = 1,
-  amplitude = 0.55,
+  amplitude = 0.6,
   tilt = 0.62,
+  particles = 70,
   className = '',
 }) {
   const mountRef = useRef(null)
@@ -20,8 +133,9 @@ export default function WaveBackground({
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.1, 60)
-    camera.position.set(0, 2.4, 6.2)
+    const camera = new THREE.PerspectiveCamera(55, mount.clientWidth / mount.clientHeight, 0.1, 60)
+    const basePos = new THREE.Vector3(0, 2.6, 6.4)
+    camera.position.copy(basePos)
     camera.lookAt(0, -0.3, -2)
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
@@ -29,66 +143,78 @@ export default function WaveBackground({
     renderer.setSize(mount.clientWidth, mount.clientHeight)
     mount.appendChild(renderer.domElement)
 
-    const width = 28
-    const depth = 15
-    const segX = 46
-    const segY = 24
-
-    const geometry = new THREE.PlaneGeometry(width, depth, segX, segY)
-    const posAttr = geometry.attributes.position
-    const baseX = new Float32Array(posAttr.count)
-    const baseY = new Float32Array(posAttr.count)
-    for (let i = 0; i < posAttr.count; i++) {
-      baseX[i] = posAttr.getX(i)
-      baseY[i] = posAttr.getY(i)
-    }
+    const width = 30
+    const depth = 16
+    const geometry = new THREE.PlaneGeometry(width, depth, 90, 48)
 
     const near = new THREE.Color(colorA)
     const far = new THREE.Color(colorB)
-    const colorArray = new Float32Array(posAttr.count * 3)
-    geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3))
-    const colorAttr = geometry.attributes.color
+    const glow = lighten(colorB, 0.55)
 
-    const halfDepth = depth / 2
-    for (let i = 0; i < posAttr.count; i++) {
-      const t = (baseY[i] + halfDepth) / depth
-      const c = near.clone().lerp(far, t)
-      colorAttr.setXYZ(i, c.r, c.g, c.b)
-    }
-    colorAttr.needsUpdate = true
-
-    const wireMat = new THREE.MeshBasicMaterial({
-      vertexColors: true,
-      wireframe: true,
+    const terrainMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uAmplitude: { value: amplitude },
+        uColorA: { value: near },
+        uColorB: { value: far },
+        uGlow: { value: glow },
+        uOpacity: { value: opacity },
+      },
+      vertexShader: TERRAIN_VERTEX,
+      fragmentShader: TERRAIN_FRAGMENT,
       transparent: true,
-      opacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })
+    const terrain = new THREE.Mesh(geometry, terrainMat)
+
+    const particleCount = particles
+    const particleGeo = new THREE.BufferGeometry()
+    const positions = new Float32Array(particleCount * 3)
+    const phases = new Float32Array(particleCount)
+    const sizes = new Float32Array(particleCount)
+    for (let i = 0; i < particleCount; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * width * 0.9
+      positions[i * 3 + 1] = Math.random() * 3.2 - 0.3
+      positions[i * 3 + 2] = (Math.random() - 0.5) * depth
+      phases[i] = Math.random() * Math.PI * 2
+      sizes[i] = Math.random() * 1.6 + 0.5
+    }
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    particleGeo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1))
+    particleGeo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
+
+    const particleMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: glow },
+      },
+      vertexShader: PARTICLE_VERTEX,
+      fragmentShader: PARTICLE_FRAGMENT,
+      transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
-    const wireMesh = new THREE.Mesh(geometry, wireMat)
-
-    const fillMat = new THREE.MeshBasicMaterial({
-      vertexColors: true,
-      transparent: true,
-      opacity: fillOpacity,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    })
-    const fillMesh = new THREE.Mesh(geometry, fillMat)
-    fillMesh.renderOrder = -1
+    const points = new THREE.Points(particleGeo, particleMat)
 
     const group = new THREE.Group()
-    group.add(fillMesh, wireMesh)
+    group.add(terrain, points)
     group.rotation.x = -Math.PI / 2 + tilt
     group.position.set(0, -2.1, -2.4)
     scene.add(group)
 
-    scene.fog = new THREE.Fog(0x07070a, 4, 11)
+    scene.fog = new THREE.Fog(0x07070a, 4, 12)
 
-    const waveAt = (x, y, t) =>
-      Math.sin(x * 0.55 + t) * amplitude * 0.6 +
-      Math.cos(y * 0.7 - t * 0.8) * amplitude * 0.4 +
-      Math.sin((x + y) * 0.35 + t * 1.3) * amplitude * 0.3
+    const pointer = { x: 0, y: 0 }
+    const targetPointer = { x: 0, y: 0 }
+    const onPointerMove = (e) => {
+      const rect = mount.getBoundingClientRect()
+      if (e.clientY < rect.top - 200 || e.clientY > rect.bottom + 200) return
+      targetPointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      targetPointer.y = ((e.clientY - rect.top) / rect.height) * 2 - 1
+    }
+    window.addEventListener('pointermove', onPointerMove)
 
     const clock = new THREE.Clock()
     let frameId = null
@@ -97,11 +223,18 @@ export default function WaveBackground({
     const renderFrame = () => {
       const t = clock.getElapsedTime() * speed
       if (!reduceMotion) {
-        for (let i = 0; i < posAttr.count; i++) {
-          posAttr.setZ(i, waveAt(baseX[i], baseY[i], t))
-        }
-        posAttr.needsUpdate = true
-        geometry.computeVertexNormals()
+        terrainMat.uniforms.uTime.value = t
+        particleMat.uniforms.uTime.value = t
+
+        pointer.x += (targetPointer.x - pointer.x) * 0.04
+        pointer.y += (targetPointer.y - pointer.y) * 0.04
+        camera.position.x = basePos.x + pointer.x * 0.7
+        camera.position.y = basePos.y - pointer.y * 0.35
+        camera.lookAt(0, -0.3, -2)
+        group.rotation.z = pointer.x * 0.03
+
+        const hue = (Math.sin(t * 0.07) + 1) * 0.5
+        terrainMat.uniforms.uColorA.value.copy(near).lerp(far, hue * 0.25)
       }
       renderer.render(scene, camera)
     }
@@ -142,15 +275,17 @@ export default function WaveBackground({
       if (frameId !== null) cancelAnimationFrame(frameId)
       observer.disconnect()
       window.removeEventListener('resize', onResize)
+      window.removeEventListener('pointermove', onPointerMove)
       geometry.dispose()
-      wireMat.dispose()
-      fillMat.dispose()
+      terrainMat.dispose()
+      particleGeo.dispose()
+      particleMat.dispose()
       renderer.dispose()
       if (mount.contains(renderer.domElement)) {
         mount.removeChild(renderer.domElement)
       }
     }
-  }, [colorA, colorB, opacity, fillOpacity, speed, amplitude, tilt])
+  }, [colorA, colorB, opacity, speed, amplitude, tilt, particles])
 
   return (
     <div
