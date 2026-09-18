@@ -37,18 +37,37 @@ const TERRAIN_VERTEX = `
   uniform float uAmplitude;
   varying float vElevation;
   varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
 
   ${NOISE_GLSL}
 
+  float elevationAt(vec2 p) {
+    float n1 = snoise(vec2(p.x * 0.14 + uTime * 0.14, p.y * 0.17 - uTime * 0.1));
+    float n2 = snoise(vec2(p.x * 0.32 - uTime * 0.22, p.y * 0.3 + uTime * 0.18)) * 0.45;
+    return (n1 + n2) * uAmplitude;
+  }
+
   void main() {
     vec3 pos = position;
-    float n1 = snoise(vec2(pos.x * 0.16 + uTime * 0.16, pos.y * 0.2 - uTime * 0.12));
-    float n2 = snoise(vec2(pos.x * 0.4 - uTime * 0.3, pos.y * 0.38 + uTime * 0.22)) * 0.5;
-    float elevation = (n1 + n2) * uAmplitude;
+    float elevation = elevationAt(pos.xy);
     pos.z += elevation;
+
+    float e = 0.5;
+    float hL = elevationAt(pos.xy - vec2(e, 0.0));
+    float hR = elevationAt(pos.xy + vec2(e, 0.0));
+    float hD = elevationAt(pos.xy - vec2(0.0, e));
+    float hU = elevationAt(pos.xy + vec2(0.0, e));
+    vec3 tangent = normalize(vec3(2.0 * e, 0.0, hR - hL));
+    vec3 bitangent = normalize(vec3(0.0, 2.0 * e, hU - hD));
+    vec3 n = normalize(cross(tangent, bitangent));
+
     vElevation = elevation;
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+    vNormal = normalize(normalMatrix * n);
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+    vViewDir = normalize(-mvPosition.xyz);
+    gl_Position = projectionMatrix * mvPosition;
   }
 `
 
@@ -60,21 +79,23 @@ const TERRAIN_FRAGMENT = `
   uniform float uTime;
   varying float vElevation;
   varying vec2 vUv;
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
 
   void main() {
-    vec2 g = abs(fract(vUv * vec2(56.0, 30.0) - 0.5) - 0.5) / fwidth(vUv * vec2(56.0, 30.0));
-    float line = min(g.x, g.y);
-    float gridMask = 1.0 - clamp(line, 0.0, 1.0);
+    vec3 normal = normalize(vNormal);
+    vec3 viewDir = normalize(vViewDir);
+    float fresnel = pow(1.0 - clamp(dot(normal, viewDir), 0.0, 1.0), 2.2);
+    float sheen = smoothstep(0.05, 0.65, vElevation);
 
-    vec3 base = mix(uColorA, uColorB, vUv.y);
-    float crest = smoothstep(0.12, 0.55, vElevation);
-    vec3 color = base + uGlow * crest * 1.3;
+    vec3 base = mix(uColorA, uColorB, clamp(vUv.y * 0.7 + vElevation * 0.35 + 0.15, 0.0, 1.0));
+    vec3 color = base + uGlow * sheen * 0.9 + uGlow * fresnel * 0.7;
 
-    float pulse = 1.0 - smoothstep(0.0, 0.5, abs(fract(vUv.y - uTime * 0.09) - 0.5) * 2.0 - 0.06);
-    color += uGlow * pulse * 0.9;
+    float swell = 1.0 - smoothstep(0.0, 0.65, abs(fract(vUv.y - uTime * 0.06) - 0.5) * 2.0 - 0.1);
+    color += uGlow * swell * 0.4;
 
-    float edgeFade = smoothstep(0.0, 0.18, vUv.y) * smoothstep(1.0, 0.8, vUv.y);
-    float alpha = (gridMask * 0.85 + 0.05 + pulse * 0.35) * uOpacity * edgeFade;
+    float edgeFade = smoothstep(0.0, 0.22, vUv.y) * smoothstep(1.0, 0.72, vUv.y);
+    float alpha = (0.32 + sheen * 0.4 + fresnel * 0.35 + swell * 0.2) * uOpacity * edgeFade;
 
     gl_FragColor = vec4(color, alpha);
   }
@@ -117,9 +138,9 @@ function lighten(hex, amt) {
 export default function WaveBackground({
   colorA = '#319c3a',
   colorB = '#5ed66e',
-  opacity = 0.65,
+  opacity = 0.55,
   speed = 1,
-  amplitude = 0.6,
+  amplitude = 0.5,
   tilt = 0.62,
   particles = 70,
   className = '',
